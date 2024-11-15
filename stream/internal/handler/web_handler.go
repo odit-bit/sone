@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -39,8 +40,12 @@ func (s *WebHandler) Handler() http.Handler {
 	r.Use(middleware.Logger) //
 	r.Use(middleware.Recoverer)
 
+	// html page
 	r.Get("/", s.indexPage)
+	r.Get("/stream", s.createStreamPage)
 	r.Get("/view/{stream}", s.playbackPage)
+
+	// api callback by the html page
 	r.Get("/file/{name}/{segment}", s.segment)
 	r.Get("/stream/create", s.createStream)
 
@@ -85,6 +90,12 @@ func (h *WebHandler) segment(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+}
+
+func (h *WebHandler) createStreamPage(w http.ResponseWriter, r *http.Request) {
+	if err := h.view.StreamKeyPage(w, "stream/create"); err != nil {
+		h.logger.Error(fmt.Sprintf("failed to send 'create-stream-page-html' %v, this is a BUG ", err))
 	}
 }
 

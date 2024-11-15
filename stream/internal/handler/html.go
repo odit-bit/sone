@@ -114,17 +114,20 @@ var VideoListHTML = `
 </html>
 `
 
-// var VideoListTemplate = func() *template.Template {
-// 	t, err := template.New("listPage").Parse(VideoListHTML)
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// 	return t
-// }()
+var StreamKeyCreateHTML = `
+<!DOCTYPE html>
+<html>
+<body>
 
-// type ListPageData struct {
-// }
+<h1>The input element</h1>
 
-// func writeListPage(w io.Writer, entry []Entry) {
-// 	VideoListTemplate.Execute(w, entry)
-// }
+<form action={{.CreateStreamKeyURL}}>
+  <label for="fname">stream name:</label>
+  <input type="text" id="fname" name="fname"><br><br>
+  <input type="submit" value="Submit">
+</form>
+
+</body>
+</html>
+
+`
