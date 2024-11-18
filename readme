@@ -2,30 +2,36 @@
 Sone is video streaming server
 
 ###  Getting Started
-Before to use , make sure the environment (os) has ffmpeg installed.see [install](https://ffmpeg.org/download.html)
+Before to use , make sure the environment (os) has ffmpeg installed.see [install ffmpeg](https://ffmpeg.org/download.html)
 
 
 #### Build from source
 ```
 git clone https://github.com/odit-bit/sone.git
 cd sone
-go build -o ./bin/sone-server ./cmd/server
+go build -o ./bin/sone ./cmd/sone
 ```
 
 run server
 ```
-./bin/sone-server -dir=/path/to/cache/stream -http=<port for playback> -rtmp=<port to ingress stream>
+./bin/sone server run "/path/to/cache/stream" -http=9696 -rtmp=1935 --debug
+```
+use --help for info
+```
+./bin/sone --help
 ```
 
 
 #### streaming (RTMP)
+
+
 ##### OBS
-Set the destination server to `rtmp://localhost:1935/live`, and stream key to anything unique. stream-key use to distinct the stream coming from client.
-start the streaming and visit to playback the stream [http://localhost:9696](http://localhost:9696)
+Set the destination server to `rtmp://localhost:1935`,set stream-key that generate from server .
+start the streaming and visit [http://localhost:9696](http://localhost:9696) to playback the stream 
 
 ##### ffmpeg
 ```
-ffmpeg -re -i input.mp4 -c:v libx264 -preset veryfast -b:v 2800k -maxrate 2996k -bufsize 4200k -pix_fmt yuv420p -g 50 -c:a aac -b:a 128k -ac 2 -ar 44100 -f flv rtmp://localhost/live/{stream-key}.
+ffmpeg -re -i input.mp4 -c:v libx264 -preset veryfast -b:v 2800k -maxrate 2996k -bufsize 4200k -pix_fmt yuv420p -g 50 -c:a aac -b:a 128k -ac 2 -ar 44100 -f flv rtmp://localhost:1935/{stream-key}.
 ```
 
 
