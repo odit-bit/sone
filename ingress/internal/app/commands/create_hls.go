@@ -7,13 +7,14 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"strings"
 
 	"github.com/livekit/go-rtmp"
 	"github.com/livekit/go-rtmp/message"
-	"github.com/odit-bit/sone/pkg/buffer"
 	"github.com/odit-bit/sone/ingress/internal/av"
 	"github.com/odit-bit/sone/ingress/internal/domain"
+	"github.com/odit-bit/sone/pkg/buffer"
 	"github.com/yutopp/go-flv"
 	"github.com/yutopp/go-flv/tag"
 )
@@ -24,6 +25,7 @@ const (
 
 type CreateHLSHandler struct {
 	rtmp.DefaultHandler
+
 	repo domain.HLSRepository
 
 	ctx    context.Context
@@ -34,7 +36,6 @@ type CreateHLSHandler struct {
 	pr   *io.PipeReader
 	pw   *io.PipeWriter
 	pErr chan error
-	// tcErr error
 
 	maxBitRate uint32
 	limiter    *av.LimitedBitrate
@@ -66,17 +67,11 @@ func NewCreateHLSHandler(ctx context.Context, hlsRepo domain.HLSRepository, opts
 func (h *CreateHLSHandler) OnServe(conn *rtmp.Conn) {}
 
 func (h *CreateHLSHandler) OnConnect(timestamp uint32, cmd *message.NetConnectionConnect) error {
-	// sURL, err := url.Parse(cmd.Command.TCURL)
-	// if err != nil {
-	// 	return fmt.Errorf("failed parse url from stream")
-	// }
-	// p, ok := sURL.User.Password()
-	// if !ok || p != "password" {
-	// 	return fmt.Errorf("unauthorized")
-	// }
-
-	// log.Printf("OnConnect-stream: %#v", cmd)
-	log.Println("Connect STREAM")
+	sURL, err := url.Parse(cmd.Command.TCURL)
+	if err != nil {
+		return fmt.Errorf("failed parse url from stream")
+	}
+	log.Printf("Connect-stream: %#v", sURL)
 	return nil
 }
 
@@ -87,25 +82,18 @@ func (h *CreateHLSHandler) OnCreateStream(timestamp uint32, cmd *message.NetConn
 
 // client publish to stream command
 func (h *CreateHLSHandler) OnPublish(_ *rtmp.StreamContext, timestamp uint32, cmd *message.NetStreamPublish) error {
-	// log.Printf("OnPublish: %#v", cmd)
-	// (example) Reject a connection when PublishingName is empty
+	log.Println("Publish STREAM", "name", cmd.PublishingName)
 	if cmd.PublishingName == "" {
 		return errors.New("PublishingName is empty")
 	}
 
-	// //setup limiter
-	// limiter := av.NewBitrateRejectorReader(h.pr, h.maxBitRate)
-	// h.limiter = limiter
-
 	// setup ingestion
 	// it should ingest the serialized rtmp payload (flv)
+
 	path := strings.Split(cmd.PublishingName, "/")
-	if len(path) != 2 {
-		return fmt.Errorf("invalid stream key/name ")
-	}
+	c := h.repo.TranscodeFLV(h.ctx, path[0], h.pr)
 	go func() {
 		// log.Println("RUNNING Trancoder")
-		c := h.repo.TranscodeFLV(h.ctx, path[0], path[1], h.pr)
 		select {
 		case <-h.ctx.Done():
 		case resp := <-c:
@@ -114,8 +102,6 @@ func (h *CreateHLSHandler) OnPublish(_ *rtmp.StreamContext, timestamp uint32, cm
 			}
 		}
 		h.pr.Close()
-		// log.Printf("ingress transcoder finish: %v \n", resp)
-		// log.Println("EXIT Trancoder")
 	}()
 
 	//setup encoder to flv
@@ -192,7 +178,7 @@ func (h *CreateHLSHandler) OnVideo(timestamp uint32, payload io.Reader) error {
 	var video tag.VideoData
 
 	if err := tag.DecodeVideoData(payload, &video); err != nil {
-		return fmt.Errorf("failed to decode video, err : %v", err)
+		return h.pipeError(fmt.Errorf("failed to decode video, err : %v", err))
 	}
 
 	body := bytes.Buffer{}
@@ -213,7 +199,6 @@ func (h *CreateHLSHandler) OnVideo(timestamp uint32, payload io.Reader) error {
 }
 
 func (h *CreateHLSHandler) OnClose() {
-
 	if h.pw != nil {
 		h.pw.Close()
 	}
@@ -229,6 +214,8 @@ func (h *CreateHLSHandler) OnClose() {
 	if h.cancel != nil {
 		h.cancel()
 	}
+	log.Println("Close STREAM")
+
 }
 
 // to check if error exist

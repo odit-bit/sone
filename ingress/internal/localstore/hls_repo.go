@@ -2,39 +2,38 @@ package localstore
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
+	"log"
+	"time"
 
-	"github.com/odit-bit/sone/ingress/internal/av"
 	"github.com/odit-bit/sone/ingress/internal/domain"
-	"github.com/spf13/afero"
+	"github.com/odit-bit/sone/ingress/internal/rpc"
+	"github.com/odit-bit/sone/pkg/av"
 )
 
 var _ domain.HLSRepository = (*hlsRepository)(nil)
 
 type hlsRepository struct {
-	root    afero.Fs
-	rootDir string
-	skRepo  domain.StreamKeyRepository //*kvstore.Client
+	streams *rpc.Streams
 }
 
-func NewHLSRepository(root string, afs afero.Fs, skRepo domain.StreamKeyRepository) *hlsRepository {
+func NewHLSRepository(streamsAPI *rpc.Streams) *hlsRepository {
 	// afs := afero.NewBasePathFs(afero.NewOsFs(), root)
 	return &hlsRepository{
-		root:    afs,
-		rootDir: root,
-		skRepo:  skRepo,
+		streams: streamsAPI,
 	}
 }
 
 // TranscodeFLV implements domain.HLSRepository.
-func (h *hlsRepository) TranscodeFLV(ctx context.Context, stream_key, stream_name string, r io.Reader) <-chan *domain.OpError {
+func (h *hlsRepository) TranscodeFLV(ctx context.Context, stream_key string, r io.Reader) <-chan *domain.OpError {
 	respC := make(chan *domain.OpError, 1)
 
-	if !h.skRepo.Exist(stream_key) {
-		respC <- domain.NewOpError("stream key not exist")
+	//START STREAMING
+	resp, err := h.streams.StartStream(ctx, stream_key)
+	if err != nil {
+		log.Println("this is BUG it should show on main error Log")
+		respC <- domain.NewOpError(err.Error())
 		close(respC)
 		return respC
 	}
@@ -46,48 +45,57 @@ func (h *hlsRepository) TranscodeFLV(ctx context.Context, stream_key, stream_nam
 	}
 
 	go func() {
-		// path for hls file
-		// root/stream_key/stream_name/index.m3u8..segmentN.ts
-		dir := filepath.Join(stream_key, stream_name)
-		if ok, err := afero.Exists(h.root, dir); err != nil {
-			writeErr(err)
-			return
-		} else if ok {
-			err = errors.Join(err, fmt.Errorf("already streaming"))
+
+		//STOP STREAMING
+		defer func() {
+			eCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_, err := h.streams.EndStream(eCtx, stream_key)
+			if err != nil {
+				log.Printf("ingress failed send endstream event, status: %v \n", err)
+				// writeErr(err)
+			}
+		}()
+
+		// err := h.postHLS(ctx, fmt.Sprintf("%v/%v/%v", "http://localhost:9797/media", resp.ID, "index.m3u8"), r)
+		err := av.PostHLS(ctx, fmt.Sprintf("%v/%v/%v", "http://localhost:9797/media", resp.ID, "index.m3u8"), r, av.HLSArgs{Types: av.HLS_lIVE})
+
+		if err != nil {
+			// err = errors.Join(err, h.root.RemoveAll(dir))
 			writeErr(err)
 			return
 		}
 
-		err := h.root.MkdirAll(dir, 0775)
-		if err != nil {
-			writeErr(err)
-			return
-		}
-
-		streamPath := filepath.Join(h.rootDir, dir)
-		err = av.WriteFLVToHLS(ctx, filepath.Join(streamPath, "index.m3u8"), r)
-		if err != nil {
-			err = errors.Join(err, h.deleteContents(stream_key))
-			writeErr(err)
-			return
-		}
 	}()
 
 	return respC
 
 }
 
-func (h *hlsRepository) deleteContents(dirPath string) error {
-	info, err := afero.ReadDir(h.root, dirPath)
-	if err != nil {
-		return err
-	}
-	for _, i := range info {
-		path := filepath.Join(dirPath, i.Name())
-		if err := h.root.RemoveAll(path); err != nil {
-			return err
-		}
-	}
+// func (h *hlsRepository) postHLS(ctx context.Context, uri string, flvReader io.Reader) error {
+// 	//ffmpeg -re -i test-stream.mp4 -codec copy -f hls  -hls_list_size 0 http://localhost:6969/{stream-key}/{playlist}.m3u8
+// 	// ffmpeg instance
 
-	return err
-}
+// 	// ffmpeg args
+
+// 	var inArgs = []ffmpeg.KwArgs{{"f": "flv"}, av.LogErrOpt}
+// 	var outArgs = []ffmpeg.KwArgs{av.TransCode, {
+
+// 		"f":                "hls",
+// 		"hls_init_time":    6,
+// 		"hls_time":         10,
+// 		"hls_list_size":    5,
+// 		"hls_segment_type": "mpegts",
+// 	}}
+
+// 	s := ffmpeg.Input("pipe:", inArgs...)
+// 	s.Context = ctx
+// 	s = s.Output(uri, outArgs...).OverWriteOutput().ErrorToStdOut()
+// 	s = s.WithInput(flvReader)
+
+// 	err := s.Run()
+// 	if err != nil {
+// 		return err
+// 	}
+// 	return nil
+// }

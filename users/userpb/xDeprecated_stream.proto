@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+// command to generate
+// protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative ./users/userpb/stream.proto
+
+
+package userpb;
+option go_package = "github.com/odit-bit/sone/users/userpb";
+import "google/protobuf/timestamp.proto";
+
+
+
+// service StreamService{
+//     rpc CreateStream(CreateStreamRequest) returns(StreamInfo) {};
+//     rpc StartStream(StartStreamRequest) returns (StartStreamResponse) {};
+//     rpc EndStream(EndStreamRequest) returns (EndStreamResponse) {};
+//     rpc ListStream(ListRequest) returns (stream StreamInfo) {};
+//     rpc GetStream(GetStreamRequest) returns (StreamInfo){};
+// }
+
+// message StreamInfo{
+//     string id = 1;
+//     string key = 2;
+//     string title = 3;
+
+//     google.protobuf.Timestamp	created = 4; 
+// 	google.protobuf.Timestamp LastStartStream = 5;
+// 	google.protobuf.Timestamp LastEndStream = 6; 
+// 	bool IsStreaming   = 7;
+// }
+
+// message GetStreamRequest {
+//     string id = 1;
+// }
+
+// message CreateStreamRequest{
+//     string token = 1;
+//     string title = 2;
+// }
+
+// message StartStreamRequest{
+//     string StreamKey = 1;
+// }
+
+// message StartStreamResponse{
+//     string ErrorMessage = 1;
+//     int32 ErrorStatus = 2;
+
+// }
+
+// message EndStreamRequest{
+//     string StreamKey = 1;
+// }
+
+// message EndStreamResponse{
+//     string ErrorMessage = 1;
+//     int32 ErrorStatus = 2;
+// }
+
+
+// message ListRequest{}
+
+// message CreateStreamResponse{
+//     string key = 1;
+//     string id = 2;
+//     string title = 3;
+// }
+
+// message GetStreamResponse {
+//     string id = 1;
+//     string name = 2;
+// }
+
+// message ListResponse{
+//     string ID = 1;
+//     string Name = 2;
+// }
+
+

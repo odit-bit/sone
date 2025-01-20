@@ -25,11 +25,11 @@ var (
 
 	HlsFileOpt ffmpeg_go.KwArgs = ffmpeg_go.KwArgs{
 		"f":                "hls",
-		"hls_time":         1,
+		"hls_time":         6,
 		"hls_list_size":    5,
 		"hls_segment_type": "mpegts",
+		"hls_flags":        "delete_segments",
 		// "hls_playlist_type": "vod",
-		"hls_flags": "delete_segments",
 
 		// "f":                  "ssegment", //not type (stream_segment)
 		// "segment_list_flags": "+live",
@@ -51,7 +51,7 @@ var (
 	// HlsFileOpt ffmpeg_go.KwArgs = ffmpeg_go.KwArgs{
 	// 	"f":                "hls",
 	// 	"hls_time":         5,
-	// 	"hls_list_size":    0, //if not '0', playlist only store 6 of segment file
+	// 	"hls_list_size":    0, //if not '0', playlist only store n of segment file
 	// 	"hls_segment_type": "mpegts",
 	// 	// "hls_playlist_type": "vod",
 	// 	// "hls_flags":         "independent_segments",
@@ -98,10 +98,6 @@ func ReadHLSFrom(ctx context.Context, w io.Writer, r io.Reader) error {
 // will create segment file from reader and write to disk,
 func WriteFLVToHLS(ctx context.Context, path string, r io.Reader) error {
 	// ffmpeg -re -i <input-file.mp4> -c:a copy -c:v copy -f hls -hls_time 5 -hls_list_size 0 <folder/index.m3u8>
-
-	// path := filepath.Join(dir, streamName)
-	// os.MkdirAll(path, 0755)
-	// indexPath, _ := filepath.Abs(filepath.Join(path, HLS_PLAYLIST))
 
 	dir := filepath.Dir(path)
 	segmentName := filepath.Join(dir, "segment%03d.ts")

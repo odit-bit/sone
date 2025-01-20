@@ -2,73 +2,67 @@ package web
 
 import (
 	"context"
-	"log"
-	"net"
-	"net/http"
-	"path/filepath"
 
-	"github.com/go-chi/chi/v5"
-	streamingapi "github.com/odit-bit/sone/streaming/api"
+	"github.com/odit-bit/sone/internal/monolith"
+	"github.com/odit-bit/sone/media/mediahttp"
+	"github.com/odit-bit/sone/streaming/streamingpb"
+	"github.com/odit-bit/sone/users/gluserpb"
+	"github.com/odit-bit/sone/users/userpb"
 )
 
-func Register(addr string, view *ViewHandler, r *chi.Mux) {
-	s := handler{
-		view:    view,
-		entries: streamingapi.NewClient(addr),
-	}
-	r.Get("/", s.indexPage)
-	r.Get("/stream", s.createStreamPage)
-	r.Get("/view/{stream-key}/{stream-name}", s.playbackPage)
-}
+var (
+	_googleClientID = "476925020269-3rljlti7sun9pbp7lpbqg04cj3mgqr0k.apps.googleusercontent.com"
+)
 
-type handler struct {
-	view    *ViewHandler
-	entries *streamingapi.Client
-}
+func StartModule(mono monolith.Monolith) {
 
-func (h *handler) indexPage(w http.ResponseWriter, r *http.Request) {
-	list, err := h.entries.List(context.Background(), streamingapi.ListQuery{})
+	/*below instance act as a service to manage data that out of bounded context of this module (driver).*/
+	mc := mediahttp.NewClient(mono.HTTP().Address())
+
+	//dial to (g)rpc server provided by monolith
+	conn, err := Dial(context.Background(), mono.RPC().Address())
 	if err != nil {
-		log.Println(err)
-		return
+		mono.Logger().Panic(err)
 	}
+	streamClient := streamingpb.NewLiveStreamClient(conn)
+	userClient := userpb.NewUserServiceClient(conn)
+	gluserClient := gluserpb.NewGoogleUserServiceClient(conn)
 
-	resp := []Entry{}
-	for e := range list {
-		resp = append(resp, Entry{
-			Endpoint: e.Endpoint,
-			Name:     e.Name,
-		})
-	}
+	/* below instance act as a repo or type that manage bounded context of this module (driven) */
+	sm := NewSessionManager()
 
-	err = h.view.VideoListPage(w, resp)
-	if err != nil {
-		log.Println(err)
-	}
-}
+	/*handler use above instance (driven or driver) to serve request */
+	// http multiplexer
+	mux := mono.Mux()
 
-func (h *handler) playbackPage(w http.ResponseWriter, r *http.Request) {
+	//login page renderer
+	loginTmpl := NewLoginTemplate(LoginPageArgs{
+		AuthCallbackUrl: "/auth",
+		RegisterUrl:     "/register",
+		GsiUrl:          "/gsi",
+		SuccessRedirect: "/stream",
+	})
+	mux.Get("/login", loginTmpl.HandleFunc)
 
-	key := chi.URLParam(r, "stream-key")
-	name := chi.URLParam(r, "stream-name")
-	source := filepath.Join("/file", key, name, "index.m3u8")
-	h.view.PlaybackPage(w, VideoPlayerData{SourceURL: source})
-}
+	//login callback endpoint that will invoke internal api call
+	authCB := NewAuthCallback(sm, userClient, gluserClient)
+	mux.Post("/auth", authCB.Handle)
 
-func (h *handler) createStreamPage(w http.ResponseWriter, r *http.Request) {
-	if err := h.view.StreamKeyPage(w, "stream/create"); err != nil {
-		// h.logger.Error(fmt.Sprintf("failed to send 'create-stream-page-html' %v, this is a BUG ", err))
-	}
-}
+	// GSI
+	gsi := NewGSIHandler(sm, gluserClient, GSIParam{
+		ClientID:        _googleClientID,
+		CallbackUrl:     "/auth/gsi",
+		SuccessRedirect: "/stream",
+	})
+	mux.Get("/gsi", gsi.RenderAndHandleAuth)
+	mux.Post("/auth/gsi", gsi.HandleGoogle)
 
-func StartUp(listener net.Listener, mux *chi.Mux) error {
-	host, port, err := net.SplitHostPort(listener.Addr().String())
-	if err != nil {
-		return err
-	}
-	if host == "" || host == "::" {
-		host = "localhost"
-	}
-	Register(net.JoinHostPort(host, port), UI(), mux)
-	return err
+	// register handler
+	reg := NewRegisterHandler(userClient, sm)
+	reg.Handle("/register", "/register/callback", "/login", mux)
+
+	// stream handler
+	stream := NewStreamHandler(sm, streamClient, mc)
+	stream.Handle("/stream", mux)
+
 }

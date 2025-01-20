@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+// command to generate
+// protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative ./users/userpb/api.proto
+
+
+package userpb;
+option go_package = "github.com/odit-bit/sone/users/userpb";
+
+service UserService {
+    rpc RegisterUser(RegisterUserRequest) returns (RegisterUserResponse) {};
+    rpc AuthenticateUser(AuthUserRequest) returns (AuthUserResponse) {};
+    rpc AuthToken(AuthTokenRequest) returns (UserInfo) {} ;
+}
+
+message UserInfo {
+    string ID = 1;
+    string username = 2;
+    string email = 3;
+}
+
+message RegisterUserRequest{
+    string username = 1;
+    string password = 2;
+}
+
+message RegisterUserResponse{
+    string id = 1;
+}
+
+message AuthUserRequest {
+    string username = 1;
+    string password = 2;
+}
+
+message AuthUserResponse {
+    string token = 1;
+}
+
+message AuthTokenRequest {
+    string token = 1;
+}
+

@@ -19,7 +19,7 @@ func NewOpError(msg string) *OpError {
 
 type HLSRepository interface {
 	//convert flv stream data to hls segment file and persisted it
-	TranscodeFLV(ctx context.Context, stream_key, stream_name string, r io.Reader) <-chan *OpError
+	TranscodeFLV(ctx context.Context, stream_key string, r io.Reader) <-chan *OpError
 }
 
 type StreamKeyRepository interface {

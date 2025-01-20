@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+// command to generate
+// protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative ./streaming/streamingpb/liveStream.proto
+
+package streamingpb;
+option go_package = "github.com/odit-bit/sone/streaming/streamingpb";
+import "google/protobuf/timestamp.proto";
+
+service liveStream{
+    rpc Insert(InsertRequest) returns (LiveStreamInfo) {};
+    rpc Start(StartRequest) returns (StartResponse) {};
+    rpc End(EndRequest) returns (LiveStreamInfo) {};
+    rpc List(ListRequest) returns (stream LiveStreamInfo) {};
+}
+
+// 
+
+message LiveStreamInfo{
+    string id =1 ;     
+	string title =2;
+	int32 isLive =3;
+    string key =  4;
+}
+
+// INSERT
+
+message InsertRequest {
+    string token = 1;
+    string title = 2;
+}
+
+// START
+
+message StartRequest {
+    string key = 1;
+}
+
+message StartResponse {
+    string id = 1;
+    string title = 2;
+    int32 isLive = 3;
+}
+
+// END
+
+message EndRequest {
+    string key = 1;
+}
+
+
+
+//LIST
+
+message ListRequest {
+    string id = 1;
+    int32 limit = 2;
+}
