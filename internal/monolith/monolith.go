@@ -30,31 +30,45 @@ func (r *RPC) Address() string {
 
 type HTTP struct {
 	addr string
+	mux  *chi.Mux
 }
 
-func NewHTTP(addr string) *HTTP {
+func NewHTTP(addr string, mux *chi.Mux) *HTTP {
 	u := url.URL{}
 	u.Scheme = "http"
 	u.Host = addr
 
-	return &HTTP{addr: u.String()}
+	return &HTTP{addr: u.String(), mux: mux}
 }
 
 func (h *HTTP) Address() string {
 	return h.addr
 }
 
+func (h *HTTP) Mux() *chi.Mux {
+	return h.mux
+}
+
+const (
+	// media storage value
+	FS = iota // default
+	MINIO
+)
+
 // monolith represent infrastructure code that module can use
 type Monolith interface {
-	FS() afero.Fs
-	KV() *kvstore.Client
 	Logger() *logrus.Logger
 	RPC() *RPC
-	Mux() *chi.Mux
 	RTMP() *rtmp.HandlerRegister
+	HTTP() *HTTP
+
+	FS() afero.Fs
+	KV() *kvstore.Client
 	DB() *sql.DB
 	Minio() *minio.Client
-	Test() bool
-	HTTP() *HTTP
+
+	//media storage type
+	MediaStorageVendor() int
+
 	Observer() *observer.Observer
 }

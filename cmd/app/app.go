@@ -1,24 +1,19 @@
-package server
+package app
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
-	"io"
-	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
-	"time"
 
 	_ "github.com/glebarez/go-sqlite"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/odit-bit/sone/ingress"
 	"github.com/odit-bit/sone/internal/monolith"
 	"github.com/odit-bit/sone/media"
@@ -48,7 +43,7 @@ type App struct {
 	minioCli    *minio.Client
 	observer    *observer.Observer
 
-	isTest bool
+	mediaStorageType int
 }
 
 // FS implements monolith.Monolith.
@@ -89,16 +84,16 @@ func (i *App) Minio() *minio.Client {
 	return i.minioCli
 }
 
-func (i *App) Test() bool {
-	return i.isTest
-}
-
 func (i *App) HTTP() *monolith.HTTP {
 	return i.http
 }
 
 func (i *App) Observer() *observer.Observer {
 	return i.observer
+}
+
+func (i *App) MediaStorageVendor() int {
+	return i.mediaStorageType
 }
 
 func (i *App) Run(ctx context.Context, rpcAddr, httpAddr, rtmpAddr string) error {
@@ -195,8 +190,13 @@ func (i *App) runRTMP(ctx context.Context, rtmpEndpoint string) error {
 }
 
 ///////////////////////////////////////
+//
+//
+//
+//
+//
 
-func startApp(dir string, rpcPort, rtmpPort, httpPort int, debug, verbose bool, isTest bool) {
+func Start(conf Config) {
 
 	// setup context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -206,35 +206,16 @@ func startApp(dir string, rpcPort, rtmpPort, httpPort int, debug, verbose bool, 
 	signal.Notify(sigC, syscall.SIGTERM, syscall.SIGINT)
 
 	//setup filesystem
-	afs := initFileSystem(dir)
-
-	// setup logfile
-	f, err := setupLogFile(afs)
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-	log.Println("log file:", f.Name())
+	afs := initFileSystem(conf.Filesystem.Path)
 
 	//setup logger
-	logWriter := io.Writer(f)
-	if debug {
-		logWriter = io.MultiWriter(f, os.Stderr)
-	}
-
-	logLevel := logrus.Level(logrus.ErrorLevel)
-	if verbose {
-		logLevel = logrus.DebugLevel
-	}
-	logger := logrus.StandardLogger()
-	logger.SetOutput(logWriter)
-	logger.Level = logLevel
+	logger := initLogger(&conf)
 
 	// kv store
 	kv := kvstore.Open()
 
 	//sqlite setup
-	dsn := ":memory:"
+	dsn := conf.SQL.DSN
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		logger.Fatal(err)
@@ -242,17 +223,11 @@ func startApp(dir string, rpcPort, rtmpPort, httpPort int, debug, verbose bool, 
 	}
 
 	//minio setup
-	minioUrl := "localhost:9000"
-	minioID := "root"
-	minioSecret := "root12345"
-	mioCli, err := minio.New(minioUrl, &minio.Options{
-		Creds:  credentials.NewStaticV4(minioID, minioSecret, ""),
-		Secure: false,
-	})
-
+	mioCli, err := initMinio(&conf)
 	if err != nil {
-		logger.Fatal("failed connect to minio:", err)
+		logger.Fatal("failed init minio client:", err)
 	}
+
 	// _, err = mioCli.HealthCheck(5 * time.Second)
 	// if err != nil {
 	// 	logger.Fatal("failed connect to minio:", err)
@@ -261,24 +236,20 @@ func startApp(dir string, rpcPort, rtmpPort, httpPort int, debug, verbose bool, 
 	// 	logger.Fatal("minio health check failed")
 	// }
 
-	// setup http muxer
-	mux := chi.NewRouter()
-	mux.Use(middleware.Logger)
-	mux.Use(middleware.Recoverer)
-
-	// endpoint
-	grpcAddr := fmt.Sprintf(":%v", rpcPort)
-	httpAddr := fmt.Sprintf(":%v", httpPort)
-	rtmpAddr := fmt.Sprintf(":%v", rtmpPort)
-
 	//GRPC
+	grpcAddr := fmt.Sprintf(":%v", conf.Rpc.Port)
 	gs := monolith.NewRPC(grpcAddr)
 	reflection.Register(gs)
 
 	//HTTP
-	hs := monolith.NewHTTP(httpAddr)
+	httpAddr := fmt.Sprintf(":%v", conf.Http.Port)
+	mux := chi.NewRouter()
+	mux.Use(middleware.Logger)
+	mux.Use(middleware.Recoverer)
+	hs := monolith.NewHTTP(httpAddr, mux)
 
 	//rtmp
+	rtmpAddr := fmt.Sprintf(":%v", conf.Rtmp.Port)
 	h := rtmp.NewHandler()
 
 	//observer
@@ -299,8 +270,8 @@ func startApp(dir string, rpcPort, rtmpPort, httpPort int, debug, verbose bool, 
 		rtmpHandler: h,
 		db:          db,
 		minioCli:    mioCli,
-		isTest:      isTest,
-		observer:    obs,
+		// isTest:      isTest,
+		observer: obs,
 	}
 
 	go func() {
@@ -328,24 +299,4 @@ func startApp(dir string, rpcPort, rtmpPort, httpPort int, debug, verbose bool, 
 		infra.logger.Errorf("shutdown server : %v ", err)
 	}
 
-}
-
-func setupLogFile(fs afero.Fs) (afero.File, error) {
-	filename := filepath.Join("log", time.Now().Local().Format(time.DateOnly))
-	if err := fs.MkdirAll(filename, 0666); err != nil {
-		return nil, err
-	}
-
-	return fs.OpenFile(filename, os.O_RDWR|os.O_APPEND, 0666)
-}
-
-func initFileSystem(dir string) afero.Fs {
-	var afs afero.Fs
-	if dir == "" {
-		afs = afero.NewMemMapFs()
-	} else {
-		afs = afero.NewBasePathFs(afs, dir)
-	}
-
-	return afs
 }

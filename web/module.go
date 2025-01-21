@@ -33,7 +33,7 @@ func StartModule(mono monolith.Monolith) {
 
 	/*handler use above instance (driven or driver) to serve request */
 	// http multiplexer
-	mux := mono.Mux()
+	mux := mono.HTTP().Mux()
 
 	//login page renderer
 	loginTmpl := NewLoginTemplate(LoginPageArgs{

@@ -14,10 +14,13 @@ import (
 func StartModule(mono monolith.Monolith) {
 	var segmentRepo domain.SegmentRepository
 	var err error
-	if mono.Test() {
+
+	switch mono.MediaStorageVendor() {
+	case monolith.FS:
 		segmentRepo = segment.NewLocalFS(mono.FS())
 		mono.Logger().Debug("media module : initiate segment repository in memory")
-	} else {
+
+	case monolith.MINIO:
 		segmentRepo, err = segment.NewMiniStore(context.Background(), "sone", mono.Minio())
 		if err != nil {
 			mono.Logger().Fatal("error initiate segment repository:", err)
@@ -31,8 +34,8 @@ func StartModule(mono monolith.Monolith) {
 	}
 
 	h := api.NewHLSHandler(app, mono.Logger())
-	mux := mono.Mux()
-	mono.Mux().Mount("/segment", mux)
+	mux := mono.HTTP().Mux()
+	mono.HTTP().Mux().Mount("/segment", mux)
 	h.Register(mux)
 
 }

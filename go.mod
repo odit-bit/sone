@@ -1,6 +1,6 @@
 module github.com/odit-bit/sone
 
-go 1.23.3
+go 1.23.5
 
 require (
 	github.com/alexedwards/scs/v2 v2.8.0
