@@ -13,7 +13,6 @@ import (
 	_ "github.com/glebarez/go-sqlite"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/minio/minio-go/v7"
 	"github.com/odit-bit/sone/ingress"
 	"github.com/odit-bit/sone/internal/monolith"
 	"github.com/odit-bit/sone/media"
@@ -35,15 +34,12 @@ type App struct {
 	fs          afero.Fs
 	kv          *kvstore.Client
 	logger      *logrus.Logger
-	mux         *chi.Mux
 	rpc         *monolith.RPC
 	http        *monolith.HTTP
 	rtmpHandler *rtmp.HandlerRegister
 	db          *sql.DB
-	minioCli    *minio.Client
+	minioConf   *monolith.MinioConfig
 	observer    *observer.Observer
-
-	mediaStorageType int
 }
 
 // FS implements monolith.Monolith.
@@ -61,11 +57,6 @@ func (i *App) Logger() *logrus.Logger {
 	return i.logger
 }
 
-// Mux implements monolith.Monolith.
-func (i *App) Mux() *chi.Mux {
-	return i.mux
-}
-
 // RPC implements monolith.Monolith.
 func (i *App) RPC() *monolith.RPC {
 	return i.rpc
@@ -80,8 +71,8 @@ func (i *App) DB() *sql.DB {
 	return i.db
 }
 
-func (i *App) Minio() *minio.Client {
-	return i.minioCli
+func (i *App) Minio() monolith.MinioConfig {
+	return *i.minioConf
 }
 
 func (i *App) HTTP() *monolith.HTTP {
@@ -90,10 +81,6 @@ func (i *App) HTTP() *monolith.HTTP {
 
 func (i *App) Observer() *observer.Observer {
 	return i.observer
-}
-
-func (i *App) MediaStorageVendor() int {
-	return i.mediaStorageType
 }
 
 func (i *App) Run(ctx context.Context, rpcAddr, httpAddr, rtmpAddr string) error {
@@ -149,8 +136,7 @@ func (i *App) runHTTP(ctx context.Context, httpEndpoint string) error {
 		return err
 	}
 
-	// srv := http.Server{Handler: otelhttp.NewHandler(i.Mux(), "/")}
-	srv := http.Server{Handler: i.mux}
+	srv := http.Server{Handler: i.http.Mux()}
 	errGroup.Go(func() error {
 		if err := srv.Serve(httpL); err != nil {
 			return err
@@ -222,20 +208,6 @@ func Start(conf Config) {
 		return
 	}
 
-	//minio setup
-	mioCli, err := initMinio(&conf)
-	if err != nil {
-		logger.Fatal("failed init minio client:", err)
-	}
-
-	// _, err = mioCli.HealthCheck(5 * time.Second)
-	// if err != nil {
-	// 	logger.Fatal("failed connect to minio:", err)
-	// }
-	// if ok := mioCli.IsOnline(); !ok {
-	// 	logger.Fatal("minio health check failed")
-	// }
-
 	//GRPC
 	grpcAddr := fmt.Sprintf(":%v", conf.Rpc.Port)
 	gs := monolith.NewRPC(grpcAddr)
@@ -264,25 +236,26 @@ func Start(conf Config) {
 		fs:          afs,
 		kv:          kv,
 		logger:      logger,
-		mux:         mux,
 		rpc:         gs,
 		http:        hs,
 		rtmpHandler: h,
 		db:          db,
-		minioCli:    mioCli,
-		// isTest:      isTest,
+
+		minioConf: &monolith.MinioConfig{
+			Addr:      conf.Minio.Address,
+			AccessKey: conf.Minio.AccessKey,
+			SecretKey: conf.Minio.SecretKey,
+		},
+
 		observer: obs,
 	}
 
 	go func() {
-		//////////////////
 		//  shutdown
 		s := <-sigC
 		cancel()
 		infra.logger.Println("got signal", s)
 	}()
-
-	////////
 
 	// media module
 	media.StartModule(&infra)

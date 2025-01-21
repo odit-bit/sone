@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/odit-bit/sone/cmd/app"
-	"github.com/odit-bit/sone/internal/monolith"
 	"github.com/spf13/cobra"
 )
 
@@ -18,8 +17,6 @@ func init() {
 	RunCMD.Flags().String("minio-secret", "", "minio secret key")
 
 	RunCMD.Flags().String("sql", "", "sql dsn string")
-	// RunCMD.Flags().Bool("verbose", false, "set level to debug level")
-	// RunCMD.Flags().Bool("test", false, "set deployment mode")
 
 	ServerCMD.AddCommand(&RunCMD)
 }
@@ -54,14 +51,6 @@ var RunCMD = cobra.Command{
 
 		sqlString, _ := cmd.Flags().GetString("sql")
 
-		// verbose, _ := cmd.Flags().GetBool("verbose")
-		// isTest, _ := cmd.Flags().GetBool("test")
-
-		mediaStoreVendor := monolith.FS
-		if minioUrl != "" {
-			mediaStoreVendor = monolith.MINIO
-		}
-
 		app.Start(app.Config{
 			Http: struct{ Port int }{
 				httpPort,
@@ -77,7 +66,6 @@ var RunCMD = cobra.Command{
 				debug,
 			},
 
-			MediaStorage: mediaStoreVendor,
 			Minio: struct {
 				Address   string
 				AccessKey string
