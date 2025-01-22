@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/grafov/m3u8"
 	"github.com/odit-bit/sone/media/internal/application"
+	"github.com/odit-bit/sone/pkg/buffer"
 	"github.com/sirupsen/logrus"
 )
 
@@ -48,25 +49,25 @@ func (h *handler) HandleGetSegment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
-	
+
 }
 
 func (h *handler) HandlePutSegment(w http.ResponseWriter, r *http.Request) {
+	// const maxFileSize = 1024 << 14 // 16 mb
+	defer r.Body.Close()
 
 	// header := r.Header.Get("X-Ingress-Forwarded-For")
 	// h.logger.Debug("media service:", r.Header)
 
-	id := chi.URLParam(r, "id")
-	segment := chi.URLParam(r, "segment")
+	// required parameter
+	key := filepath.Join(
+		chi.URLParam(r, "id"),
+		chi.URLParam(r, "segment"),
+	)
 
-	ext := filepath.Ext(segment)
-	key := filepath.Join(id, segment)
-
+	ext := filepath.Ext(key)
 	switch ext {
 	case ".m3u8":
-		// read body
-		defer r.Body.Close()
-
 		pl, err := parseM3u8(r.Body)
 		if err != nil {
 			h.logger.Debug("failed parse .m3u8 ", err)
@@ -74,27 +75,35 @@ func (h *handler) HandlePutSegment(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		defer pl.Close()
-		if err := h.app.Put(r.Context(), application.PutSegmentArgs{
+		// defer pl.Close()
+		if err := h.app.Put(r.Context(), &application.PutSegmentArgs{
+			Size: pl.Encode().Len(),
 			Key:  key,
 			Body: pl.Encode(),
 		}); err != nil {
-			h.logger.Error("media api streamHLS handler failed save playlist ", err)
+			h.logger.Error("media http handler,  failed save playlist ", err)
 			http.Error(w, "", http.StatusInternalServerError)
 			return
 		}
 
 	case ".ts":
 
-		// read body
-		defer r.Body.Close()
+		content := buffer.Pool.Get()
+		defer buffer.Pool.Put(content)
 
-		// path := fmt.Sprintf("%s/%s", id, segment)
-		if err := h.app.Put(r.Context(), application.PutSegmentArgs{
+		n, err := io.Copy(content, r.Body)
+		if err != nil {
+			h.logger.Error("media http handler, failed to read body:", err)
+			http.Error(w, "", http.StatusBadRequest)
+			return
+		}
+
+		if err := h.app.Put(r.Context(), &application.PutSegmentArgs{
+			Size: int(n),
 			Key:  key,
-			Body: r.Body,
+			Body: content,
 		}); err != nil {
-			h.logger.Error("media api streamHLS handler failed save segment ", err)
+			h.logger.Error("media http handler, failed save segment ", err)
 			http.Error(w, "", http.StatusInternalServerError)
 			return
 		}

@@ -2,7 +2,6 @@ package av
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	ffmpeg "github.com/u2takey/ffmpeg-go"
@@ -43,9 +42,9 @@ func PostHLS(ctx context.Context, uri string, flvReader io.Reader, param HLSArgs
 			"hls_segment_type": "mpegts",
 			"hls_flags":        "program_date_time",
 
-			"method":          "PUT",
-			"http_user_agent": "UserAgent: 'sone/1.0 (compatible; linux)'",
-			"headers":         fmt.Sprintf("X-Ingress-Forwarded-For: %s", uri),
+			"method": "PUT",
+			// "http_user_agent": "UserAgent: 'sone/1.0 (compatible; linux)'",
+			// "headers":         fmt.Sprintf("X-Ingress-Forwarded-For: %s", uri),
 		}
 	)
 

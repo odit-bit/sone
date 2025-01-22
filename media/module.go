@@ -70,6 +70,5 @@ func initMinio(conf monolith.MinioConfig) (*minio.Client, error) {
 	if ok := mioCli.IsOnline(); !ok {
 		return nil, fmt.Errorf("minio health check failed")
 	}
-
 	return mioCli, nil
 }

@@ -30,8 +30,9 @@ func (app *Media) Get(ctx context.Context, arg GetSegmentArgs) (*domain.Segment,
 type PutSegmentArgs struct {
 	Key  string
 	Body io.Reader
+	Size int
 }
 
-func (app *Media) Put(ctx context.Context, arg PutSegmentArgs) error {
-	return app.segments.InsertVideoSegment(ctx, arg.Key, arg.Body)
+func (app *Media) Put(ctx context.Context, arg *PutSegmentArgs) error {
+	return app.segments.InsertVideoSegment(ctx, arg.Key, arg.Body, arg.Size)
 }

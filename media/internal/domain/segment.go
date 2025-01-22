@@ -16,7 +16,7 @@ type LiveRepository interface {
 }
 
 type SegmentStorer interface {
-	InsertVideoSegment(ctx context.Context, path string, r io.Reader) error
+	InsertVideoSegment(ctx context.Context, path string, r io.Reader, size int) error
 }
 
 type SegmentFetcher interface {

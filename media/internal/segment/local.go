@@ -33,7 +33,7 @@ func (l *localStore) GetVideoSegment(ctx context.Context, key string) (*domain.S
 }
 
 // InsertVideoSegment implements domain.SegmentRepository.
-func (l *localStore) InsertVideoSegment(ctx context.Context, key string, r io.Reader) error {
+func (l *localStore) InsertVideoSegment(ctx context.Context, key string, r io.Reader, size int) error {
 
 	// log.Printf("\n put: %v \n", key)
 	f, err := l.blob.OpenFile(key, os.O_CREATE|os.O_WRONLY, 0666)
@@ -41,7 +41,7 @@ func (l *localStore) InsertVideoSegment(ctx context.Context, key string, r io.Re
 		return err
 	}
 
-	n, err := io.Copy(f, r)
+	n, err := io.CopyN(f, r, int64(size))
 	if err != nil {
 		return err
 	}

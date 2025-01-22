@@ -7,7 +7,6 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/odit-bit/sone/media/internal/domain"
-	"github.com/odit-bit/sone/pkg/buffer"
 )
 
 var _ domain.SegmentStorer = (*minioStore)(nil)
@@ -42,20 +41,21 @@ func (m *minioStore) GetVideoSegment(ctx context.Context, path string) (*domain.
 	return &domain.Segment{Body: obj}, nil
 }
 
-func (m *minioStore) InsertVideoSegment(_ context.Context, path string, content io.Reader) error {
-	// path := path.Join(videoID, part)
+func (m *minioStore) InsertVideoSegment(_ context.Context, path string, content io.Reader, size int) error {
 
-	b := buffer.Pool.Get()
-	n, err := io.Copy(b, content)
-	if err != nil {
-		return nil
-	}
+	// b := buffer.Pool.Get()
+	// n, err := io.Copy(b, content)
+	// if err != nil {
+	// 	return nil
+	// }
+	// defer buffer.Pool.Put(b)
+
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(3*time.Second))
 	defer cancel()
-	_, err = m.mio.PutObject(ctx, m.bucket, path, b, n, minio.PutObjectOptions{})
+
+	_, err := m.mio.PutObject(ctx, m.bucket, path, content, int64(size), minio.PutObjectOptions{})
 	if err != nil {
 		return err
 	}
-	buffer.Pool.Put(b)
 	return nil
 }

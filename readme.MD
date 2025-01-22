@@ -14,11 +14,7 @@ go build -o ./bin/sone ./cmd/sone
 
 run server
 ```
-./bin/sone server run "/path/to/cache/stream" -http=9696 -rtmp=1935 --debug
-```
-use --help for info
-```
-./bin/sone --help
+./bin/sone server run --debug
 ```
 
 
