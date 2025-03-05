@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"os"
 
 	"github.com/odit-bit/sone/internal/monolith"
 	"github.com/odit-bit/sone/media/mediahttp"
@@ -11,7 +12,7 @@ import (
 )
 
 var (
-	_googleClientID = "476925020269-3rljlti7sun9pbp7lpbqg04cj3mgqr0k.apps.googleusercontent.com"
+	_googleClientID = os.Getenv("GOOGLE_AUTH_CLIENT_ID")
 )
 
 func StartModule(mono monolith.Monolith) {
